@@ -380,34 +380,6 @@
             border-top: 1px solid #e9ecef;
         }
 
-        .current-status {
-            margin-left: auto;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 0.9rem;
-            font-weight: 600;
-            text-align: center;
-            min-width: 100px;
-        }
-
-        .current-status.pending {
-            background: #fff3cd;
-            color: #856404;
-            border: 1px solid #ffeaa7;
-        }
-
-        .current-status.approved {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-
-        .current-status.rejected {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-
         .btn {
             padding: 12px 24px;
             border: none;
@@ -492,6 +464,65 @@
             border: 1px solid #f5c6cb;
         }
 
+        .bottom-export {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 25px;
+            margin-top: 30px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        /* 图片查看大图功能 */
+        .image-modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            cursor: pointer;
+        }
+
+        .modal-content {
+            margin: auto;
+            display: block;
+            width: 90%;
+            max-width: 1200px;
+            max-height: 90%;
+            object-fit: contain;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .close {
+            position: absolute;
+            top: 15px;
+            right: 35px;
+            color: #f1f1f1;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close:hover {
+            color: #bbb;
+        }
+
+        .image-clickable {
+            cursor: pointer;
+            transition: opacity 0.3s ease;
+        }
+
+        .image-clickable:hover {
+            opacity: 0.8;
+        }
+
         @media (max-width: 768px) {
             .container {
                 padding: 15px;
@@ -517,12 +548,6 @@
             .review-controls {
                 flex-direction: column;
                 align-items: stretch;
-            }
-
-            .current-status {
-                margin-left: 0;
-                margin-top: 10px;
-                align-self: center;
             }
 
             .btn-export {
@@ -580,7 +605,7 @@
                     <input type="text" id="search-input" placeholder="搜索提示内容..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 1rem;">
                 </div>
             </div>
-            <button class="btn btn-export" onclick="exportResults()">
+            <button class="btn btn-export" onclick="reviewSystem.exportResults()">
                 📊 导出审核结果
             </button>
         </div>
@@ -588,6 +613,19 @@
         <div id="items-container">
             <div class="loading">正在加载数据...</div>
         </div>
+
+        <!-- 底部导出按钮 -->
+        <div class="bottom-export">
+            <button class="btn btn-export" onclick="reviewSystem.exportResults()">
+                📊 导出所有审核结果
+            </button>
+        </div>
+    </div>
+
+    <!-- 图片查看大图模态框 -->
+    <div id="imageModal" class="image-modal" onclick="closeModal()">
+        <span class="close" onclick="closeModal()">&times;</span>
+        <img class="modal-content" id="modalImage">
     </div>
 
     <script>
@@ -665,16 +703,6 @@
                 return 'pending';
             }
 
-            getStatusDisplay(itemId) {
-                const status = this.getReviewStatus(itemId);
-                const statusText = {
-                    'pending': '⏳ 待审核',
-                    'approved': '✅ 已通过',
-                    'rejected': '❌ 已拒绝'
-                }[status];
-                return `<span class="current-status ${status}">${statusText}</span>`;
-            }
-
             renderItems() {
                 const container = document.getElementById('items-container');
                 
@@ -718,9 +746,6 @@
                             <button class="btn btn-reject" onclick="reviewSystem.rejectItem('${item.id}')">
                                 ❌ 拒绝
                             </button>
-                            <div class="current-status" id="status-${item.id}">
-                                ${this.getStatusDisplay(item.id)}
-                            </div>
                         </div>
                     </div>
                 `;
@@ -745,7 +770,7 @@
                             <div class="reference-images">
                                 ${item.image_ref.map(img => `
                                     <div class="reference-image">
-                                        <img src="${img}" alt="参考图片" onerror="this.style.display='none'">
+                                        <img src="${img}" alt="参考图片" class="image-clickable" onclick="openModal('${img}')" onerror="this.style.display='none'">
                                     </div>
                                 `).join('')}
                             </div>
@@ -801,7 +826,7 @@
                     <div class="model-images">
                         ${images.map(img => `
                             <div class="model-image">
-                                <img src="${img}" alt="模型输出图片" onerror="this.style.display='none'">
+                                <img src="${img}" alt="模型输出图片" class="image-clickable" onclick="openModal('${img}')" onerror="this.style.display='none'">
                             </div>
                         `).join('')}
                     </div>
@@ -842,22 +867,15 @@
             approveItem(itemId) {
                 this.reviews[itemId] = { approved: true, rejected: false, timestamp: new Date().toISOString() };
                 this.saveReviews();
-                this.updateItemStatus(itemId);
+                this.renderItems();
                 this.updateStats();
             }
 
             rejectItem(itemId) {
                 this.reviews[itemId] = { approved: false, rejected: true, timestamp: new Date().toISOString() };
                 this.saveReviews();
-                this.updateItemStatus(itemId);
+                this.renderItems();
                 this.updateStats();
-            }
-
-            updateItemStatus(itemId) {
-                const statusElement = document.getElementById(`status-${itemId}`);
-                if (statusElement) {
-                    statusElement.innerHTML = this.getStatusDisplay(itemId);
-                }
             }
 
             updateStats() {
@@ -903,28 +921,16 @@
                     };
                 });
 
-                // 添加统计信息
-                const stats = {
-                    total: results.length,
-                    approved: results.filter(r => r.approved).length,
-                    rejected: results.filter(r => r.rejected).length,
-                    pending: results.filter(r => !r.approved && !r.rejected).length,
-                    export_time: new Date().toISOString()
-                };
+                // 导出JSON
+                const jsonData = JSON.stringify(results, null, 2);
+                this.downloadFile(jsonData, 'life_review_results.json', 'application/json');
 
-                // 导出JSON（包含统计信息）
-                const jsonData = {
-                    statistics: stats,
-                    results: results
-                };
-                this.downloadFile(JSON.stringify(jsonData, null, 2), 'life_review_results.json', 'application/json');
-
-                // 导出CSV（在最后添加统计行）
-                const csvData = this.convertToCSV(results, stats);
+                // 导出CSV
+                const csvData = this.convertToCSV(results);
                 this.downloadFile(csvData, 'life_review_results.csv', 'text/csv');
             }
 
-            convertToCSV(data, stats) {
+            convertToCSV(data) {
                 const headers = ['ID', 'Prompt', 'Task Type', 'Approved', 'Rejected', 'Timestamp'];
                 const rows = data.map(item => [
                     item.id,
@@ -935,18 +941,7 @@
                     item.timestamp || ''
                 ]);
 
-                // 添加统计信息行
-                const statsRows = [
-                    ['', '', '', '', '', ''],
-                    ['=== 统计信息 ===', '', '', '', '', ''],
-                    ['总项目数', stats.total, '', '', '', ''],
-                    ['已通过', stats.approved, '', '', '', ''],
-                    ['已拒绝', stats.rejected, '', '', '', ''],
-                    ['待审核', stats.pending, '', '', '', ''],
-                    ['导出时间', stats.export_time, '', '', '', '']
-                ];
-
-                return [headers.join(','), ...rows.map(row => row.join(',')), ...statsRows.map(row => row.join(','))].join('\n');
+                return [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
             }
 
             downloadFile(content, filename, mimeType) {
@@ -964,6 +959,26 @@
 
         // 初始化系统
         const reviewSystem = new LifeReviewSystem();
+
+        // 图片查看大图功能
+        function openModal(imageSrc) {
+            const modal = document.getElementById('imageModal');
+            const modalImg = document.getElementById('modalImage');
+            modal.style.display = 'block';
+            modalImg.src = imageSrc;
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('imageModal');
+            modal.style.display = 'none';
+        }
+
+        // 按ESC键关闭模态框
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeModal();
+            }
+        });
     </script>
 </body>
 </html>
