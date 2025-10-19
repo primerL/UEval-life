@@ -380,6 +380,34 @@
             border-top: 1px solid #e9ecef;
         }
 
+        .current-status {
+            margin-left: auto;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-align: center;
+            min-width: 100px;
+        }
+
+        .current-status.pending {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .current-status.approved {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .current-status.rejected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
         .btn {
             padding: 12px 24px;
             border: none;
@@ -489,6 +517,12 @@
             .review-controls {
                 flex-direction: column;
                 align-items: stretch;
+            }
+
+            .current-status {
+                margin-left: 0;
+                margin-top: 10px;
+                align-self: center;
             }
 
             .btn-export {
@@ -631,6 +665,16 @@
                 return 'pending';
             }
 
+            getStatusDisplay(itemId) {
+                const status = this.getReviewStatus(itemId);
+                const statusText = {
+                    'pending': '⏳ 待审核',
+                    'approved': '✅ 已通过',
+                    'rejected': '❌ 已拒绝'
+                }[status];
+                return `<span class="current-status ${status}">${statusText}</span>`;
+            }
+
             renderItems() {
                 const container = document.getElementById('items-container');
                 
@@ -674,6 +718,9 @@
                             <button class="btn btn-reject" onclick="reviewSystem.rejectItem('${item.id}')">
                                 ❌ 拒绝
                             </button>
+                            <div class="current-status" id="status-${item.id}">
+                                ${this.getStatusDisplay(item.id)}
+                            </div>
                         </div>
                     </div>
                 `;
@@ -795,15 +842,22 @@
             approveItem(itemId) {
                 this.reviews[itemId] = { approved: true, rejected: false, timestamp: new Date().toISOString() };
                 this.saveReviews();
-                this.renderItems();
+                this.updateItemStatus(itemId);
                 this.updateStats();
             }
 
             rejectItem(itemId) {
                 this.reviews[itemId] = { approved: false, rejected: true, timestamp: new Date().toISOString() };
                 this.saveReviews();
-                this.renderItems();
+                this.updateItemStatus(itemId);
                 this.updateStats();
+            }
+
+            updateItemStatus(itemId) {
+                const statusElement = document.getElementById(`status-${itemId}`);
+                if (statusElement) {
+                    statusElement.innerHTML = this.getStatusDisplay(itemId);
+                }
             }
 
             updateStats() {
@@ -849,16 +903,28 @@
                     };
                 });
 
-                // 导出JSON
-                const jsonData = JSON.stringify(results, null, 2);
-                this.downloadFile(jsonData, 'life_review_results.json', 'application/json');
+                // 添加统计信息
+                const stats = {
+                    total: results.length,
+                    approved: results.filter(r => r.approved).length,
+                    rejected: results.filter(r => r.rejected).length,
+                    pending: results.filter(r => !r.approved && !r.rejected).length,
+                    export_time: new Date().toISOString()
+                };
 
-                // 导出CSV
-                const csvData = this.convertToCSV(results);
+                // 导出JSON（包含统计信息）
+                const jsonData = {
+                    statistics: stats,
+                    results: results
+                };
+                this.downloadFile(JSON.stringify(jsonData, null, 2), 'life_review_results.json', 'application/json');
+
+                // 导出CSV（在最后添加统计行）
+                const csvData = this.convertToCSV(results, stats);
                 this.downloadFile(csvData, 'life_review_results.csv', 'text/csv');
             }
 
-            convertToCSV(data) {
+            convertToCSV(data, stats) {
                 const headers = ['ID', 'Prompt', 'Task Type', 'Approved', 'Rejected', 'Timestamp'];
                 const rows = data.map(item => [
                     item.id,
@@ -869,7 +935,18 @@
                     item.timestamp || ''
                 ]);
 
-                return [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+                // 添加统计信息行
+                const statsRows = [
+                    ['', '', '', '', '', ''],
+                    ['=== 统计信息 ===', '', '', '', '', ''],
+                    ['总项目数', stats.total, '', '', '', ''],
+                    ['已通过', stats.approved, '', '', '', ''],
+                    ['已拒绝', stats.rejected, '', '', '', ''],
+                    ['待审核', stats.pending, '', '', '', ''],
+                    ['导出时间', stats.export_time, '', '', '', '']
+                ];
+
+                return [headers.join(','), ...rows.map(row => row.join(',')), ...statsRows.map(row => row.join(','))].join('\n');
             }
 
             downloadFile(content, filename, mimeType) {
