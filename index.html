@@ -703,6 +703,16 @@
                 return 'pending';
             }
 
+            getStatusDisplay(itemId) {
+                const status = this.getReviewStatus(itemId);
+                const statusText = {
+                    'pending': '⏳ 待审核',
+                    'approved': '✅ 已通过',
+                    'rejected': '❌ 已拒绝'
+                }[status];
+                return `<span class="current-status ${status}">${statusText}</span>`;
+            }
+
             renderItems() {
                 const container = document.getElementById('items-container');
                 
@@ -746,6 +756,9 @@
                             <button class="btn btn-reject" onclick="reviewSystem.rejectItem('${item.id}')">
                                 ❌ 拒绝
                             </button>
+                            <div class="current-status" id="status-${item.id}">
+                                ${this.getStatusDisplay(item.id)}
+                            </div>
                         </div>
                     </div>
                 `;
@@ -867,15 +880,22 @@
             approveItem(itemId) {
                 this.reviews[itemId] = { approved: true, rejected: false, timestamp: new Date().toISOString() };
                 this.saveReviews();
-                this.renderItems();
+                this.updateItemStatus(itemId);
                 this.updateStats();
             }
 
             rejectItem(itemId) {
                 this.reviews[itemId] = { approved: false, rejected: true, timestamp: new Date().toISOString() };
                 this.saveReviews();
-                this.renderItems();
+                this.updateItemStatus(itemId);
                 this.updateStats();
+            }
+
+            updateItemStatus(itemId) {
+                const statusElement = document.getElementById(`status-${itemId}`);
+                if (statusElement) {
+                    statusElement.innerHTML = this.getStatusDisplay(itemId);
+                }
             }
 
             updateStats() {
