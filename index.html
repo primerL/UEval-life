@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Life Review System</title>
+    <!-- 添加marked.js库用于Markdown渲染 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@4.3.0/marked.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -636,6 +638,16 @@
                 this.reviews = this.loadReviews();
                 this.init();
             }
+            // 渲染Markdown内容
+            renderMarkdown(text) {
+                if (!text) return '';
+                try {
+                    return marked.parse(text);
+                } catch (error) {
+                    console.error('Markdown渲染错误:', error);
+                    return text; // 如果渲染失败，返回原始文本
+                }
+            }
 
             async init() {
                 await this.loadData();
@@ -741,7 +753,7 @@
                             <div class="status-badge ${statusClass}" style="margin-left: auto;">${statusText}</div>
                         </div>
                         <div class="item-content">
-                            <div class="prompt">${item.prompt}</div>
+                            <div class="prompt markdown-content">${this.renderMarkdown(item.prompt)}</div>
                             
                             ${this.renderReferenceSection(item)}
                             ${this.renderRubrics(item)}
@@ -771,7 +783,7 @@
                     html += `
                         <div class="reference-section">
                             <div class="section-title">参考文本</div>
-                            <div class="reference-text">${item.text_ref}</div>
+                            <div class="reference-text markdown-content">${this.renderMarkdown(item.text_ref)}</div>
                         </div>
                     `;
                 }
@@ -804,7 +816,7 @@
                         <div class="rubrics-header">评估标准</div>
                         ${item.text_rubrics.map(rubric => `
                             <div class="rubric-item">
-                                <div class="rubric-criterion">${rubric.criterion}</div>
+                                <div class="rubric-criterion markdown-content">${this.renderMarkdown(rubric.criterion)}</div>
                                 <div class="rubric-tags">
                                     ${rubric.tags ? rubric.tags.map(tag => `<span class="rubric-tag">${tag}</span>`).join('') : ''}
                                 </div>
@@ -822,7 +834,7 @@
                 return `
                     <div class="model-section">
                         <div class="model-header">🤖 ${modelName} 输出</div>
-                        ${textData ? `<div class="model-text">${textData}</div>` : ''}
+                        ${textData ? `<div class="model-text markdown-content">${this.renderMarkdown(textData)}</div>` : ''}
                         ${this.renderModelImages(imageData)}
                         ${this.renderModelResults(textResult, imageResult)}
                     </div>
@@ -856,7 +868,7 @@
                         <div class="results-header">文本评估结果</div>
                         ${textResult.map(result => `
                             <div class="result-item ${result.criteria_met ? 'passed' : 'failed'}">
-                                ${result.criteria_met ? '✅' : '❌'} ${result.criterion}
+                                ${result.criteria_met ? '✅' : '❌'} <span class="markdown-content">${this.renderMarkdown(result.criterion)}</span>
                             </div>
                         `).join('')}
                     `;
@@ -867,7 +879,7 @@
                         <div class="results-header">图像评估结果</div>
                         ${imageResult.map(result => `
                             <div class="result-item ${result.criteria_met ? 'passed' : 'failed'}">
-                                ${result.criteria_met ? '✅' : '❌'} ${result.criterion}
+                                ${result.criteria_met ? '✅' : '❌'} <span class="markdown-content">${this.renderMarkdown(result.criterion)}</span>
                             </div>
                         `).join('')}
                     `;
